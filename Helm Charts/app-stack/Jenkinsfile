@@ -1,0 +1,51 @@
+pipeline {
+  agent { label 'ansible-agent' }
+
+  environment {
+    CHART_NAME = "app-stack"
+    CHART_VERSION = "0.1.${BUILD_NUMBER}"
+    NEXUS_REPO = "http://nexus.sarychev/repository/helm/"
+    NEXUS_CRED_ID = "nexus-credentials"
+  }
+	
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Package Helm Chart') {
+      steps {
+        dir("helm/${CHART_NAME}") {
+          sh """
+            helm dependency update
+            helm lint .
+            helm package . --version ${CHART_VERSION}
+          """
+        }
+      }
+    }
+
+    stage('Push to Nexus') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED_ID}", usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+          sh """
+            curl -u "$NEXUS_USER:$NEXUS_PASS" \
+              --upload-file helm/${CHART_NAME}/${CHART_NAME}-${CHART_VERSION}.tgz \
+              ${NEXUS_REPO}
+          """
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Helm chart ${CHART_NAME}-${CHART_VERSION}.tgz uploaded to Nexus"
+    }
+    failure {
+      echo "Build failed"
+    }
+  }
+}
