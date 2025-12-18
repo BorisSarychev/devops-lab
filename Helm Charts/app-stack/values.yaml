@@ -1,0 +1,83 @@
+# values.yaml
+
+images:
+  frontend:
+    repository: nexus.sarychev/repository/docker-hosted/frontend_service
+    tag: latest
+  backend:
+    repository: nexus.sarychev/repository/docker-hosted/backend_service
+    tag: latest
+  compute:
+    repository: nexus.sarychev/repository/docker-hosted/compute_service
+    tag: latest
+  mongo:
+    repository: mongo
+    tag: "version"
+
+
+replicas:
+  frontend: 1
+  backend: 2
+  compute: 3
+  mongo: 1
+
+resources:
+  frontend:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  backend:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  compute:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  mongo:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+
+imagePullSecrets:
+  name: nexus-creds
+
+
+mongo:
+  host: mongo
+  database: compute_demo
+  username: example
+  password: example
+  ConfigMap: config
+  Secret: secret
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: longhorn
+
+
+port:
+  frontend: port
+  backend: port
+  mongo: port
+
+ingress:
+  enabled: true
+  host: myapp.local
+  ingressClassName: traefik
+  paths:
+    frontend: /
+    backend: /api

@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+scrape_configs:
+  # Сбор метрик с Node Exporter'ов
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['192.168.1.100:9100', '192.168.1.101:9100', '192.168.1.102:9100', '192.168.1.103:9100']
+
+  # Сам Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'kube-state-metrics'
+    static_configs:
+      - targets: ['192.168.1.100:31080']  # мастер-нода или HAProxy
+

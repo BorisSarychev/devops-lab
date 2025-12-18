@@ -1,0 +1,5 @@
+helm repo add grafana https://grafana.github.io/helm-charts
+
+helm install promtail grafana/promtail /
+   -n monitoring --create-namespace /
+   --set "config.clients[0].url=http://monitoring.sarychev:3100/loki/api/v1/push"

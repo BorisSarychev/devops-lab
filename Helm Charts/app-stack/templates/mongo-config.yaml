@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.mongo.ConfigMap_name | default "config" }}
+data:
+  MONGO_HOST: {{ .Values.mongo.host | default "mongo" }}
+  MONGO_PORT: {{ .Values.port.mongo }}
+  MONGO_DB: {{ .Values.mongo.database | default "compute_demo" }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.mongo.secret_name | default "secret" }}
+type: Opaque
+stringData:
+  MONGO_USER: {{ .Values.mongo.username | default "example" }}
+  MONGO_PASS: {{ .Values.mongo.password | default "example" }}

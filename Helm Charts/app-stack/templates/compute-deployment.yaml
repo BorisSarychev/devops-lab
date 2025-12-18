@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compute-deployment
+spec:
+  replicas: {{ .Values.replicas.compute | default "3" }}
+  selector:
+    matchLabels:
+      app: compute
+  template:
+    metadata:
+      labels:
+        app: compute
+    spec:
+      containers:
+      - name: compute
+        image: {{ .Values.images.compute.repository }}:{{ .Values.images.compute.tag }}
+        resources:
+          limits:
+            cpu: {{ .Values.resources.compute.limits.cpu }}
+            memory: {{ .Values.resources.compute.limits.memory }}
+          requests:
+            cpu: {{ .Values.resources.compute.requests.cpu }}
+            memory: {{ .Values.resources.compute.requests.memory }}
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        envFrom:
+          - configMapRef:
+              name: {{ .Values.mongo.ConfigMap }}
+          - secretRef:
+              name: {{ .Values.mongo.Secret }}
+      imagePullSecrets:
+      - name: {{ .Values.imagePullSecrets.name }}

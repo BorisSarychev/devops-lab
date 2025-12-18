@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+spec:
+  replicas: {{ .Values.replicas.mongo }}
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: {{ .Values.images.mongo.repository }}:{{ .Values.images.mongo.tag }}
+        ports:
+        - containerPort: {{ .Values.port.mongo }}
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: {{ .Values.mongo.username | default "example" }}
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          value: {{ .Values.mongo.password | default "example" }}
+        resources:
+          limits:
+            cpu: {{ .Values.resources.mongo.limits.cpu }}
+            memory: {{ .Values.resources.mongo.limits.memory }}
+          requests:
+            cpu: {{ .Values.resources.mongo.requests.cpu }}
+            memory: {{ .Values.resources.mongo.requests.memory }}
+      volumes:
+      - name: mongo-data
+        persistentVolumeClaim:
+          claimName: mongo-pvc

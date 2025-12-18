@@ -1,0 +1,6 @@
+apiVersion: v2
+name: app-stack
+description: Helm chart for my full application stack (frontend, backend, compute, mongo)
+type: application
+version: 0.1.0
+appVersion: "latest"

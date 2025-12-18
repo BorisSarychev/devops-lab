@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+spec:
+  replicas: {{ .Values.replicas.backend | default "1" }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: {{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}
+        resources:
+          limits:
+            cpu: {{ .Values.resources.backend.limits.cpu }}
+            memory: {{ .Values.resources.backend.limits.memory }}
+          requests:
+            cpu: {{ .Values.resources.backend.requests.cpu }}
+            memory: {{ .Values.resources.backend.requests.memory }}
+        envFrom:
+          - configMapRef:
+              name: {{ .Values.mongo.ConfigMap }}
+          - secretRef:
+              name: {{ .Values.mongo.Secret }}
+      imagePullSecrets:
+      - name: {{ .Values.imagePullSecrets.name }}

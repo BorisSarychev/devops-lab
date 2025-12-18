@@ -1,0 +1,73 @@
+//Сreate-primary-control-plane
+pipeline {
+  agent { label 'ansible-agent' }
+
+  parameters {
+    string(name: 'OS_USER', defaultValue: 'sarychev')
+    string(name: 'KUBE_VERSION', defaultValue: '1.34.2')
+    string(name: 'PROXMOX_HOST', defaultValue: '192.168.1.152')
+    string(name: 'PROXMOX_NODE', defaultValue: 'pve-02')     
+    string(name: 'TEMPLATE', defaultValue: 'ubuntu-template')
+    string(name: 'STORAGE', defaultValue: 'local-lvm')
+    string(name: 'NAME', defaultValue: 'k8s-master')
+    string(name: 'BRIDGE', defaultValue: 'vmbr0')
+    string(name: 'BASE_IP', defaultValue: '192.168.1.100')
+    string(name: 'GATEWAY', defaultValue: '192.168.1.1')
+    string(name: 'MEMORY', defaultValue: '2048')
+    string(name: 'CORES', defaultValue: '2')
+    string(name: 'VMID', defaultValue: '110')
+  }
+
+  environment {
+    PROXMOX_CREDS = credentials('pve-02')
+    SSH_CRED_ID = "${params.TEMPLATE}"
+  }
+
+  stages {
+    stage('Checkout Infra Repo') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Create VMs') {
+      steps {
+        sh """
+          bash -c '
+          source ~/ansible-venv/bin/activate
+          ansible-playbook ansible/playbooks/create-k8s-master.yml \
+            -e "proxmox_host=${params.PROXMOX_HOST}" \
+            -e "proxmox_user=${PROXMOX_CREDS_USR}" \
+            -e "proxmox_pass=${PROXMOX_CREDS_PSW}" \
+            -e "proxmox_node=${params.PROXMOX_NODE}" \
+            -e "storage=${params.STORAGE}" \
+            -e "clone=${params.TEMPLATE}" \
+            -e "name=${params.NAME}" \
+            -e "newid=${params.VMID}" \
+            -e "base_ip=${params.BASE_IP}" \
+            -e "ciuser=${params.OS_USER}" \
+            -e "gateway=${params.GATEWAY}" \
+            -e "memory=${params.MEMORY}" \
+            -e "cores=${params.CORES}" \
+              '
+            """ 
+          }
+        }
+    
+    stage('Init Master') {
+      steps{
+        withEnv(['ANSIBLE_HOST_KEY_CHECKING=False']) {
+          sshagent(credentials: [env.SSH_CRED_ID]) {
+            withCredentials([file(credentialsId: 'nexus-crt', variable: 'NEXUS_CRT')]) {
+              sh """
+                ansible-playbook -i "${params.BASE_IP}," ansible/playbooks/init-k8s-master.yml \
+                -e kube_version=${params.KUBE_VERSION} \
+                -e nexus_cert_file=$NEXUS_CRT
+                """
+              }
+            }
+          }
+      }
+    }
+  }
+}

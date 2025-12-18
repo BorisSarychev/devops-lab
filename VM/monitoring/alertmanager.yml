@@ -1,0 +1,22 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "telegram"
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 30m
+
+receivers:
+  - name: "telegram"
+    telegram_configs:
+      - bot_token: "BOT_TOKEN" #Подставить токен чатбота
+        chat_id: CHAT_ID #Подставить свой чат id
+        parse_mode: HTML
+        message: |
+          <b>{{ .CommonLabels.alertname }}</b>
+          {{ range .Alerts }}
+          <b>Instance:</b> {{ .Labels.instance }}
+          <b>Description:</b> {{ .Annotations.description }}
+          {{ end }}

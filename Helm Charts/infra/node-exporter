@@ -1,0 +1,10 @@
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+
+helm install node-exporter prometheus-community/prometheus-node-exporter /
+    -n monitoring --create-namespace /
+    --set "image.repository=prometheus/node-exporter" /
+    --set "image.tag=v1.8.2"   --set "hostNetwork=true"  /
+    --set "service.enabled=false" /
+    --set "hostPort.enabled=true" /
+    --set "hostPort.port=9100"

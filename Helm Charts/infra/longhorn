@@ -1,0 +1,3 @@
+helm repo add longhorn https://charts.longhorn.io
+
+helm install longhorn longhorn/longhorn -n longhorn-system --create-namespace
