@@ -1,0 +1,71 @@
+inbounds:
+  - listen: 192.168.1.1
+    tag: all-in
+    port: 1083
+    protocol: dokodemo-door
+    settings:
+      network: tcp,udp
+      followRedirect: true
+    streamSettings:
+      sockopt:
+        tproxy: tproxy
+    sniffing:
+      enabled: true
+      metadataOnly: false
+      destOverride:
+        - fakedns
+  - listen: 127.0.0.1
+    tag: dns-in
+    port: 5353
+    protocol: dokodemo-door
+    settings:
+      address: 192.168.1.1
+      network: tcp,udp
+routing:
+  domainStrategy: AsIs
+  domainMatcher: hybrid
+  rules:
+    - type: field
+      inboundTag:
+        - dns-in
+      port: 5353
+      outboundTag: dns-out
+    - type: field
+      inboundTag:
+        - all-in
+      outboundTag: proxy
+outbounds:
+  - protocol: dns
+    tag: dns-out
+    streamSettings:
+      sockopt:
+        mark: 2
+  - protocol: vless
+    tag: proxy
+    settings:
+      vnext:
+        - address: X.X.X.X
+          port: 443
+          users:
+            - id: ID
+              flow: xtls-rprx-vision
+              encryption: none
+    streamSettings:
+      network: tcp
+      security: reality
+      realitySettings:
+        fingerprint: chrome
+        serverName: www.google.com
+        publicKey: publicKey
+        shortId: 6b0a74ec
+      sockopt:
+        mark: 2
+dns:
+  servers:
+    - fakedns
+    - address: fakedns
+      skipFallback: true
+  queryStrategy: UseIPv4
+fakedns:
+  ipPool: 110.64.0.0/10
+  poolSize: 65535

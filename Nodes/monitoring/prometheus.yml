@@ -14,7 +14,7 @@ scrape_configs:
   # Сбор метрик с Node Exporter'ов
   - job_name: 'node-exporter'
     static_configs:
-      - targets: ['192.168.1.100:9100', '192.168.1.101:9100', '192.168.1.102:9100', '192.168.1.103:9100']
+      - targets: [Адреса всех нод]
 
   # Сам Prometheus
   - job_name: 'prometheus'
@@ -23,5 +23,5 @@ scrape_configs:
 
   - job_name: 'kube-state-metrics'
     static_configs:
-      - targets: ['192.168.1.100:31080']  # мастер-нода или HAProxy
+      - targets: [Адрес control-plane]
 

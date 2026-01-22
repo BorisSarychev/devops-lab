@@ -14,6 +14,7 @@
       debug:
         msg: "{{ join_cmd.stdout }}"
 
+    # Передаём команду в localhost (для использования во втором плейе)
     - name: Share join command to localhost
       add_host:
         name: localhost

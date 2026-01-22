@@ -1,0 +1,22 @@
+uci add network route
+uci set network.@route[-1].interface='tun0'
+uci set network.@route[-1].target='0.0.0.0/0'
+uci set network.@route[-1].table='110'
+
+uci add network rule
+uci set network.@rule[-1].mark='1'
+uci set network.@rule[-1].lookup='110'
+uci set network.@rule[-1].priority='100'
+
+uci commit network
+/etc/init.d/network reload
+
+###Добавить в startup###
+
+nft 'add table xray'
+
+nft 'add chain xray prerouting { type filter hook prerouting priority mangle; }'
+nft 'add rule xray prerouting ip saddr 192.168.1.0/24 ip daddr 110.64.0.0/10 ip protocol { tcp, udp } tproxy to :1083 meta mark set 1'
+
+
+exit 0

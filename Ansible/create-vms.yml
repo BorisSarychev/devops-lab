@@ -1,0 +1,57 @@
+- name: Create KVM VM from template
+  hosts: localhost
+  gather_facts: no
+  vars:
+    ansible_python_interpreter: /root/ansible-venv/bin/python
+
+  tasks:
+    - name: Clone KVM template
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_host }}"
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_pass }}"
+        node: "{{ proxmox_node }}"
+        clone: "{{ clone }}"       # VMID шаблона
+        full: yes                  # клонировать полностью
+        name: "{{ name }}"      # имя новой VM
+        newid: "{{ newid }}"
+        state: present
+        timeout: 600
+    
+    - name: Setup created VM
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_host }}"
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_pass }}"
+        node: "{{ proxmox_node }}"                
+        name: "{{ name }}"
+        cores: "{{ cores }}"
+        memory: "{{ memory }}"
+        ciuser: "{{ ciuser }}"
+        net:
+          net0: 'virtio,bridge=vmbr0'
+        ipconfig:
+          ipconfig0: "ip={{ base_ip }}/24,gw={{ gateway }}"
+        state: present
+        update: true
+        update_unsafe: true
+        timeout: 600
+    
+    - name: Resize VM disk
+      community.proxmox.proxmox_disk:
+        api_host: "{{ proxmox_host }}"
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_pass }}"
+        vmid: "{{ newid }}"
+        disk: "scsi0"
+        size: "+{{ disk_size }}G"
+        state: resized
+
+    - name: Start VM
+      community.proxmox.proxmox_kvm:
+        api_user: "{{ proxmox_user }}"
+        api_password: "{{ proxmox_pass }}"
+        api_host: "{{ proxmox_host }}"
+        vmid: "{{ newid }}"
+        node: "{{ proxmox_node }}"
+        state: started

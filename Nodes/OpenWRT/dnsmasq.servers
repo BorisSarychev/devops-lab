@@ -1,0 +1,9 @@
+# ip.me
+server=/ip.me/127.0.0.1#5353
+
+server=/prod-cdn.packages.k8s.io/127.0.0.1#5353
+server=/pkgs.k8s.io/127.0.0.1#5353
+server=/download.docker.com/127.0.0.1#5353
+server=/mirror.gcr.io/127.0.0.1#5353
+server=/ru.archive.ubuntu.com/127.0.0.1#5353
+server=/security.ubuntu.com/127.0.0.1#5353

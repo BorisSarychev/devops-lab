@@ -13,8 +13,9 @@ pipeline {
     string(name: 'BRIDGE', defaultValue: 'vmbr0')
     string(name: 'BASE_IP', defaultValue: '192.168.1.100')
     string(name: 'GATEWAY', defaultValue: '192.168.1.1')
-    string(name: 'MEMORY', defaultValue: '2048')
+    string(name: 'MEMORY', defaultValue: '4096')
     string(name: 'CORES', defaultValue: '2')
+    string(name: 'DISK_SIZE', defaultValue: '10')
     string(name: 'VMID', defaultValue: '110')
   }
 
@@ -33,9 +34,12 @@ pipeline {
     stage('Create VMs') {
       steps {
         sh """
+
+          echo "[k8s_master]" > inventory.ini
+          echo "${params.BASE_IP} ansible_user=${params.OS_USER}" >> inventory.ini
           bash -c '
           source ~/ansible-venv/bin/activate
-          ansible-playbook ansible/playbooks/create-k8s-master.yml \
+          ansible-playbook ansible/playbooks/create-vms.yml \
             -e "proxmox_host=${params.PROXMOX_HOST}" \
             -e "proxmox_user=${PROXMOX_CREDS_USR}" \
             -e "proxmox_pass=${PROXMOX_CREDS_PSW}" \
@@ -49,6 +53,7 @@ pipeline {
             -e "gateway=${params.GATEWAY}" \
             -e "memory=${params.MEMORY}" \
             -e "cores=${params.CORES}" \
+            -e "disk_size=${params.DISK_SIZE}"
               '
             """ 
           }
@@ -60,7 +65,7 @@ pipeline {
           sshagent(credentials: [env.SSH_CRED_ID]) {
             withCredentials([file(credentialsId: 'nexus-crt', variable: 'NEXUS_CRT')]) {
               sh """
-                ansible-playbook -i "${params.BASE_IP}," ansible/playbooks/init-k8s-master.yml \
+                ansible-playbook -i inventory.ini ansible/playbooks/init-k8s-master.yml \
                 -e kube_version=${params.KUBE_VERSION} \
                 -e nexus_cert_file=$NEXUS_CRT
                 """

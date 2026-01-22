@@ -15,28 +15,26 @@ pipeline {
     string(name: 'GATEWAY', defaultValue: '192.168.1.1')
     string(name: 'MEMORY', defaultValue: '2048')
     string(name: 'CORES', defaultValue: '2')
+    string(name: 'DISK_SIZE', defaultValue: '10')
     string(name: 'START_VMID', defaultValue: '110')
     string(name: 'COUNT', defaultValue: '3')
   }
 
   environment {
     PROXMOX_CREDS = credentials('pve-02')
+    //UBUNTU_TEMPLATE_CREDS = credentials('ubuntu-template')
+    //KUBE_JOIN_CMD = credentials('kube-join-token')
   }
 
   stages {
     stage('Checkout Infra Repo') {
       steps {
-        dir('infra-ansible') {
-          git branch: 'unite-pipelines',
-              credentialsId: 'ansible-agent_gitlab',
-              url: 'git@gitlab.sarychev:sarychev/infra-ansible.git'
-        }
+        checkout scm
       }
     }
 
     stage('Create VMs') {
       steps {
-        dir('infra-ansible') {
         sh """
         echo "[k8s_master]" > inventory.ini
         echo "${params.MASTER_NODE} ansible_user=${params.OS_USER}" >> inventory.ini
@@ -47,6 +45,7 @@ pipeline {
             def name = "${params.NAME}${i + 1}"
             def newid = params.START_VMID.toInteger() + i
 
+            // Вычисляем IP средствами shell через Python (установлен в агенте)
             def ip = sh(
               script: """python3 -c "import ipaddress; print(str(ipaddress.ip_address('${params.BASE_IP}') + ${i}))" """,
               returnStdout: true
@@ -62,7 +61,7 @@ pipeline {
             sh """
               bash -c '
               source ~/ansible-venv/bin/activate
-              ansible-playbook playbooks/create-vms.yml \
+              ansible-playbook ansible/playbooks/create-vms.yml \
                 -e "proxmox_host=${params.PROXMOX_HOST}" \
                 -e "proxmox_user=${PROXMOX_CREDS_USR}" \
                 -e "proxmox_pass=${PROXMOX_CREDS_PSW}" \
@@ -77,6 +76,7 @@ pipeline {
                 -e "gateway=${params.GATEWAY}" \
                 -e "memory=${params.MEMORY}" \
                 -e "cores=${params.CORES}" \
+                -e "disk_size=${params.DISK_SIZE}"
               '
             """
           
@@ -84,36 +84,51 @@ pipeline {
           }
         }
       }
-    }
+    
     
     stage('Setup Nodes') {
-      steps {
-        dir('infra-ansible') {
+      steps {  
           withEnv(['ANSIBLE_HOST_KEY_CHECKING=False']) {
           sshagent(credentials: ['ubuntu-template']) {
             withCredentials([file(credentialsId: 'nexus-crt', variable: 'NEXUS_CRT')]) {
             sh '''
-            ansible-playbook -i inventory.ini playbooks/setup-k8s-nodes.yml \
+            ansible-playbook -i inventory.ini ansible/playbooks/setup-k8s-nodes.yml \
               -e kube_version=1.34.2 \
               -e nexus_cert_file=$NEXUS_CRT
             '''
               }
             }
-          }
         }
       }
     }
 
+//    stage('Get Join Token') {
+//        steps {
+//            sshagent(credentials: ['k8s-master']) {
+//                script {
+//                    // Получаем команду join с мастер-ноды
+//                    def join_cmd = sh(
+//                        script: "ssh -o StrictHostKeyChecking=no sarychev@${params.MASTER_NODE} 'sudo kubeadm token create --print-join-command'",
+//                        returnStdout: true
+//                    ).trim()
+//
+                   // Сохраняем в JSON файл
+//                    writeFile file: 'join_cmd.json', text: """{
+//                        "kube_join_cmd": "${join_cmd.replaceAll('"', '\\"')}"
+//                    }"""
+//                }
+//            }
+//        }
+//    }
+
     stage('Join Cluster') {
       steps {
-        dir('infra-ansible') {
           withEnv(['ANSIBLE_HOST_KEY_CHECKING=False']) {
           sshagent(credentials: ['ubuntu-template']) {
             sh """
-              ansible-playbook -i inventory.ini playbooks/join-workers.yml
+              ansible-playbook -i inventory.ini ansible/playbooks/join-workers.yml
             """
             }
-          }
         }
       }
     }
