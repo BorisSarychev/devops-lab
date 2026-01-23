@@ -1,0 +1,62 @@
+helm_repos:
+  - name: traefik
+    repo: https://traefik.github.io/charts
+  - name: longhorn
+    repo: https://charts.longhorn.io
+  - name: prometheus-community
+    repo: https://prometheus-community.github.io/helm-charts
+  - name: grafana
+    repo: https://grafana.github.io/helm-charts
+  - name: nexus-helm
+    repo: http://nexus.sarychev/repository/helm/
+    username: username
+    password: password
+
+helm_charts:
+  # Инфраструктурные компоненты - общие для всех окружений
+  - name: traefik
+    chart: traefik/traefik
+    namespace: traefik
+    create_namespace: true
+    values:
+      service:
+        type: NodePort
+
+  - name: longhorn
+    chart: longhorn/longhorn
+    namespace: longhorn-system
+    create_namespace: true
+
+  - name: kube-state-metrics
+    chart: prometheus-community/kube-state-metrics
+    namespace: monitoring
+    create_namespace: true
+    values:
+      service:
+        type: NodePort
+        nodePort: 31080
+        port: 8080
+
+  - name: promtail
+    chart: grafana/promtail
+    namespace: monitoring
+    create_namespace: true
+    values:
+      config:
+        clients:
+          - url: "http://monitoring.sarychev:3100/loki/api/v1/push"
+
+  - name: node-exporter
+    chart: prometheus-community/prometheus-node-exporter
+    namespace: monitoring
+    create_namespace: true
+    values:
+      image:
+        repository: quay.io/prometheus/node-exporter
+        tag: 1.8.2
+      hostNetwork: true
+      service:
+        enabled: false
+      hostPort:
+        enabled: true
+        port: 9100

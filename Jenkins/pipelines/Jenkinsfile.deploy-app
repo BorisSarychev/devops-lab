@@ -1,0 +1,99 @@
+pipeline {
+    agent { label 'ansible-agent' }
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'stage', 'prod'],
+            description: 'Target environment for deployment'
+        )
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run mode (ansible --check)')
+    }
+
+    environment {
+        KUBECONFIG = credentials('kubeconfig')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Environment') {
+            steps {
+                script {
+                    if (!params.ENVIRONMENT) {
+                        error("ENVIRONMENT parameter is required!")
+                    }
+                    echo "🚀 Deploying application to ${params.ENVIRONMENT} environment"
+                }
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                script {
+                    def checkFlag = params.DRY_RUN ? '--check' : ''
+                    sh """
+                        ansible-playbook -i localhost, ansible/playbooks/deploy_app.yml \\
+                            -e environment=${params.ENVIRONMENT} \\
+                            ${checkFlag}
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            when {
+                expression { !params.DRY_RUN }
+            }
+            steps {
+                script {
+                    def namespace = params.ENVIRONMENT == 'prod' ? 'app' : "app-${params.ENVIRONMENT}"
+                    sh """
+                        echo "=== Checking Application Namespace: ${namespace} ==="
+                        kubectl get namespace ${namespace} || true
+                        
+                        echo "=== Checking Helm Release ==="
+                        helm list -n ${namespace} || true
+                        
+                        echo "=== Checking Pods ==="
+                        kubectl get pods -n ${namespace} || true
+                        
+                        echo "=== Checking Services ==="
+                        kubectl get svc -n ${namespace} || true
+                        
+                        echo "=== Checking Ingress ==="
+                        kubectl get ingress -n ${namespace} || true
+                        
+                        echo "=== Checking Secrets ==="
+                        kubectl get secret nexus-creds -n ${namespace} || true
+                        
+                        if [ "${params.ENVIRONMENT}" == "prod" ]; then
+                            echo "=== Checking Traefik Service (Prod) ==="
+                            kubectl get svc traefik -n traefik || true
+                        fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Application deployment to ${params.ENVIRONMENT} completed successfully!"
+        }
+        failure {
+            echo "❌ Application deployment to ${params.ENVIRONMENT} failed!"
+        }
+        always {
+            script {
+                if (params.DRY_RUN) {
+                    echo "ℹ️ This was a dry-run (--check). No changes were made to the cluster."
+                }
+            }
+        }
+    }
+}

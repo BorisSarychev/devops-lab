@@ -5,8 +5,8 @@ pipeline {
   parameters {
     string(name: 'OS_USER', defaultValue: 'sarychev')
     string(name: 'KUBE_VERSION', defaultValue: '1.34.2')
-    string(name: 'PROXMOX_HOST', defaultValue: '192.168.1.152')
-    string(name: 'PROXMOX_NODE', defaultValue: 'pve-02')     
+    string(name: 'PROXMOX_HOST', defaultValue: '192.168.1.3')
+    string(name: 'PROXMOX_NODE', defaultValue: 'boris')     
     string(name: 'TEMPLATE', defaultValue: 'ubuntu-template')
     string(name: 'STORAGE', defaultValue: 'local-lvm')
     string(name: 'NAME', defaultValue: 'k8s-master')
@@ -20,7 +20,7 @@ pipeline {
   }
 
   environment {
-    PROXMOX_CREDS = credentials('pve-02')
+    PROXMOX_CREDS = credentials("${params.PROXMOX_NODE}")
     SSH_CRED_ID = "${params.TEMPLATE}"
   }
 
@@ -34,7 +34,6 @@ pipeline {
     stage('Create VMs') {
       steps {
         sh """
-
           echo "[k8s_master]" > inventory.ini
           echo "${params.BASE_IP} ansible_user=${params.OS_USER}" >> inventory.ini
           bash -c '
@@ -58,7 +57,7 @@ pipeline {
             """ 
           }
         }
-    
+
     stage('Init Master') {
       steps{
         withEnv(['ANSIBLE_HOST_KEY_CHECKING=False']) {

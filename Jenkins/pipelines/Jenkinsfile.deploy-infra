@@ -1,0 +1,66 @@
+pipeline {
+    agent { label 'ansible-agent' }
+
+    parameters {
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run mode (ansible --check)')
+    }
+
+    environment {
+        KUBECONFIG = credentials('kubeconfig')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Deploy Infrastructure') {
+            steps {
+                script {
+                    def checkFlag = params.DRY_RUN ? '--check' : ''
+                    sh """
+                        ansible-playbook -i localhost, ansible/playbooks/deploy_infra.yml \\
+                            ${checkFlag}
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            when {
+                expression { !params.DRY_RUN }
+            }
+            steps {
+                sh """
+                    echo "=== Checking Traefik ==="
+                    kubectl get pods -n traefik || true
+                    kubectl get svc -n traefik || true
+                    
+                    echo "=== Checking Longhorn ==="
+                    kubectl get pods -n longhorn-system || true
+                    
+                    echo "=== Checking Monitoring Stack ==="
+                    kubectl get pods -n monitoring || true
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Infrastructure deployment completed successfully!"
+        }
+        failure {
+            echo "❌ Infrastructure deployment failed!"
+        }
+        always {
+            script {
+                if (params.DRY_RUN) {
+                    echo "ℹ️ This was a dry-run (--check). No changes were made to the cluster."
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,100 @@
+---
+- name: Deploy application to Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    ansible_python_interpreter: /home/jenkins/ansible-venv/bin/python
+  vars_files:
+    - ../vars/{{ environment }}.yaml
+
+  tasks:
+
+    - name: Ensure Helm is installed
+      ansible.builtin.command: |
+        bash -c "command -v helm || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)"
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Add nexus-helm repository
+      community.kubernetes.helm_repository:
+        name: nexus-helm
+        repo_url: "{{ nexus_helm_repo.repo }}"
+        username: "{{ nexus_helm_repo.username }}"
+        password: "{{ nexus_helm_repo.password }}"
+
+    - name: Update helm repositories
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Create namespace if it doesn't exist
+      community.kubernetes.k8s:
+        name: "{{ app_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Generate docker auth base64
+      set_fact:
+        docker_auth_b64: "{{ (docker_registry_secret.username + ':' + docker_registry_secret.password) | b64encode }}"
+
+    - name: Create docker config dictionary
+      set_fact:
+        docker_config_dict:
+          auths:
+            "{{ docker_registry_secret.server }}":
+              username: "{{ docker_registry_secret.username }}"
+              password: "{{ docker_registry_secret.password }}"
+              email: "{{ docker_registry_secret.email }}"
+              auth: "{{ docker_auth_b64 }}"
+
+    - name: Create or update docker registry secret
+      community.kubernetes.k8s:
+        name: "{{ docker_registry_secret.name }}"
+        api_version: v1
+        kind: Secret
+        namespace: "{{ app_namespace }}"
+        definition:
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: "{{ docker_config_dict | to_json | b64encode }}"
+        state: present
+
+    - name: Prepare chart values from environment variables
+      set_fact:
+        chart_values: "{{ app_chart_values | default({}) }}"
+
+    - name: Install/Upgrade Helm chart
+      community.kubernetes.helm:
+        name: "{{ app_release_name }}"
+        chart_ref: "{{ app_chart_reference }}"
+        release_namespace: "{{ app_namespace }}"
+        create_namespace: false
+        values: "{{ chart_values }}"
+        state: present
+        update_repo_cache: false
+
+    - name: Patch Traefik service to NodePorts for prod environment
+      community.kubernetes.k8s:
+        api_version: v1
+        kind: Service
+        name: traefik
+        namespace: "{{ traefik_namespace }}"
+        merge_type: strategic-merge
+        definition:
+          spec:
+            type: NodePort
+            ports:
+              - name: web
+                port: 80
+                nodePort: "{{ traefik_nodeport_http }}"
+                protocol: TCP
+              - name: websecure
+                port: 443
+                nodePort: "{{ traefik_nodeport_https }}"
+                protocol: TCP
+      when: 
+        - environment == 'prod'
+        - traefik_nodeport_http is defined
+        - traefik_nodeport_https is defined
+      ignore_errors: true

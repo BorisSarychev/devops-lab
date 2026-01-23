@@ -1,0 +1,79 @@
+---
+- name: Deploy core infrastructure to Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    ansible_python_interpreter: /home/jenkins/ansible-venv/bin/python
+  vars_files:
+    - ../vars/infra.yaml
+
+  tasks:
+
+    - name: Ensure Helm is installed
+      ansible.builtin.command: |
+        bash -c "command -v helm || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)"
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Add helm repositories
+      community.kubernetes.helm_repository:
+        name: "{{ item.name }}"
+        repo_url: "{{ item.repo }}"
+        username: "{{ item.username | default(omit) }}"
+        password: "{{ item.password | default(omit) }}"
+      loop: "{{ helm_repos }}"
+
+    - name: Update helm repositories
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Prepare chart values
+      set_fact:
+        chart_values_dict: "{{ chart_values_dict | default({}) | combine({item.name: (item | dict2items | selectattr('key', 'equalto', 'values') | map(attribute='value') | first | default({}))}) }}"
+      loop: "{{ helm_charts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Install Helm charts
+      community.kubernetes.helm:
+        name: "{{ item.name }}"
+        chart_ref: "{{ item.chart }}"
+        release_namespace: "{{ item.namespace }}"
+        create_namespace: "{{ item.create_namespace | default(false) }}"
+        values: "{{ chart_values_dict[item.name] | default({}) }}"
+        state: present
+        update_repo_cache: false
+      loop: "{{ helm_charts }}"
+      loop_control:
+        label: "{{ item.name }}"
+      ignore_errors: "{{ item.ignore_errors | default(false) }}"
+
+    - name: Get Traefik namespace
+      set_fact:
+        traefik_namespace: "{{ item.namespace }}"
+      loop: "{{ helm_charts }}"
+      when: item.name == 'traefik'
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Patch Traefik service to NodePorts 30080/30443
+      community.kubernetes.k8s:
+        api_version: v1
+        kind: Service
+        name: traefik
+        namespace: "{{ traefik_namespace }}"
+        merge_type: strategic-merge
+        definition:
+          spec:
+            type: NodePort
+            ports:
+              - name: web
+                port: 80
+                nodePort: 30080
+                protocol: TCP
+              - name: websecure
+                port: 443
+                nodePort: 30443
+                protocol: TCP
+      ignore_errors: true

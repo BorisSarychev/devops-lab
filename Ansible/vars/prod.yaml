@@ -1,0 +1,175 @@
+helm_repos:
+  - name: traefik
+    repo: https://traefik.github.io/charts
+  - name: longhorn
+    repo: https://charts.longhorn.io
+  - name: prometheus-community
+    repo: https://prometheus-community.github.io/helm-charts
+  - name: grafana
+    repo: https://grafana.github.io/helm-charts
+  - name: nexus-helm
+    repo: http://nexus.sarychev/repository/helm/
+    username: username
+    password: password
+
+helm_charts:
+  # Инфраструктурные компоненты - общие для всех окружений
+  - name: traefik
+    chart: traefik/traefik
+    namespace: traefik
+    create_namespace: false  # Уже существует
+    values:
+      service:
+        type: NodePort
+
+  - name: longhorn
+    chart: longhorn/longhorn
+    namespace: longhorn-system
+    create_namespace: false  # Уже существует
+
+  - name: kube-state-metrics
+    chart: prometheus-community/kube-state-metrics
+    namespace: monitoring
+    create_namespace: false  # Уже существует
+    values:
+      service:
+        type: NodePort
+        nodePort: 31080
+        port: 8080
+
+  - name: promtail
+    chart: grafana/promtail
+    namespace: monitoring
+    create_namespace: false  # Уже существует
+    values:
+      config:
+        clients:
+          - url: "http://monitoring.sarychev:3100/loki/api/v1/push"
+
+  - name: node-exporter
+    chart: prometheus-community/prometheus-node-exporter
+    namespace: monitoring
+    create_namespace: false  # Уже существует
+    values:
+      image:
+        repository: quay.io/prometheus/node-exporter
+        tag: 1.8.2
+      hostNetwork: true
+      service:
+        enabled: false
+      hostPort:
+        enabled: true
+        port: 9100
+
+# ===== Application deployment variables =====
+environment: prod
+
+# Application namespace
+app_namespace: app
+
+# Application release name
+app_release_name: app-stack
+
+# Helm chart reference
+app_chart_reference: nexus-helm/app-stack
+
+# Nexus Helm repository configuration
+nexus_helm_repo:
+  repo: http://nexus.sarychev/repository/helm/
+  username: username
+  password: password
+
+# Docker registry secret configuration
+docker_registry_secret:
+  name: nexus-creds
+  server: nexus.sarychev
+  username: username
+  password: password
+  email: example@email
+
+# Traefik namespace
+traefik_namespace: traefik
+
+# Traefik NodePort configuration (required for prod - used by haproxy)
+traefik_nodeport_http: 30080
+traefik_nodeport_https: 30443
+
+# Application Helm chart values
+app_chart_values:
+  images:
+    frontend:
+      repository: nexus.sarychev/repository/docker-hosted/frontend_service
+      tag: latest
+    backend:
+      repository: nexus.sarychev/repository/docker-hosted/backend_service
+      tag: latest
+    compute:
+      repository: nexus.sarychev/repository/docker-hosted/compute_service
+      tag: latest
+    mongo:
+      repository: mongo
+      tag: "4.4"
+
+  replicas:
+    frontend: 2
+    backend: 2
+    compute: 3
+    mongo: 1
+
+  resources:
+    frontend:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    backend:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+    compute:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    mongo:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+  imagePullSecrets:
+    name: nexus-creds
+
+  mongo:
+    host: mongo
+    database: compute_demo
+    username: root
+    password: example
+    ConfigMap: config
+    Secret: secret
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: longhorn
+
+  port:
+    frontend: 80
+    backend: 8000
+    mongo: 27017
+
+  ingress:
+    enabled: true
+    host: myapp.local
+    ingressClassName: traefik
+    paths:
+      frontend: /
+      backend: /api
